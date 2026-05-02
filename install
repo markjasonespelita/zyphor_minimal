@@ -1,0 +1,256 @@
+#!/bin/sh
+
+# =============================================================================
+#  MyOS Installer
+#  Supports: QEMU/VirtualBox/VMware + Real Hardware (BIOS + UEFI)
+# =============================================================================
+
+MOUNT="/mnt"
+
+# -----------------------------------------------------------------------------
+# Check required tools
+# -----------------------------------------------------------------------------
+for tool in fdisk mkfs.ext4 mount cp lsblk; do
+    if ! command -v "$tool" > /dev/null 2>&1; then
+        echo "[ERROR] Missing required tool: $tool"
+        exit 1
+    fi
+done
+
+# -----------------------------------------------------------------------------
+# Auto-detect disk
+# -----------------------------------------------------------------------------
+echo "[MyOS] Detecting available disks..."
+lsblk -d -o NAME,SIZE,TYPE | grep disk
+
+echo ""
+printf "Enter disk to install to (e.g. sda, nvme0n1, vda): /dev/"
+read DISKNAME
+DISK="/dev/$DISKNAME"
+
+# Handle NVMe partition naming (nvme0n1 -> nvme0n1p1)
+case "$DISK" in
+    *nvme*|*mmcblk*) PART="${DISK}p1" ;;
+    *)               PART="${DISK}1"  ;;
+esac
+
+echo "[MyOS] Selected disk : $DISK"
+echo "[MyOS] Partition     : $PART"
+
+# -----------------------------------------------------------------------------
+# Check disk exists
+# -----------------------------------------------------------------------------
+if [ ! -b "$DISK" ]; then
+    echo "[ERROR] Disk $DISK not found."
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# Safety check
+# -----------------------------------------------------------------------------
+if mountpoint -q "$MOUNT"; then
+    echo "[ERROR] $MOUNT is already mounted. Unmount it first."
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# Detect BIOS or UEFI
+# -----------------------------------------------------------------------------
+if [ -d /sys/firmware/efi ]; then
+    BOOT_MODE="uefi"
+    echo "[MyOS] Boot mode: UEFI"
+else
+    BOOT_MODE="bios"
+    echo "[MyOS] Boot mode: BIOS/Legacy"
+fi
+
+# -----------------------------------------------------------------------------
+# Confirm
+# -----------------------------------------------------------------------------
+echo ""
+echo "======================================"
+echo "  WARNING: This will ERASE $DISK"
+echo "  Partition : $PART"
+echo "  Boot mode : $BOOT_MODE"
+echo "======================================"
+printf "Type YES to continue: "
+read confirm
+[ "$confirm" != "YES" ] && echo "Aborted." && exit 1
+
+# -----------------------------------------------------------------------------
+# 1. Partition
+# -----------------------------------------------------------------------------
+echo "[1/7] Partitioning $DISK..."
+
+if [ "$BOOT_MODE" = "uefi" ]; then
+    # GPT partition table with EFI partition + root partition
+    printf "g\nn\n1\n\n+512M\nt\n1\nn\n2\n\n\nw\n" | fdisk "$DISK"
+    case "$DISK" in
+        *nvme*|*mmcblk*) EFI_PART="${DISK}p1" ; PART="${DISK}p2" ;;
+        *)               EFI_PART="${DISK}1"  ; PART="${DISK}2"  ;;
+    esac
+else
+    # MBR partition table with single root partition
+    printf "o\nn\np\n1\n\n\na\nw\n" | fdisk "$DISK"
+fi
+
+sleep 2
+
+# -----------------------------------------------------------------------------
+# 2. Format
+# -----------------------------------------------------------------------------
+echo "[2/7] Formatting partitions..."
+
+if [ "$BOOT_MODE" = "uefi" ]; then
+    mkfs.fat -F32 "$EFI_PART"
+    echo "[MyOS] Formatted EFI partition: $EFI_PART"
+fi
+
+mkfs.ext4 -F -L "MyOS" "$PART"
+echo "[MyOS] Formatted root partition: $PART"
+
+# -----------------------------------------------------------------------------
+# 3. Mount
+# -----------------------------------------------------------------------------
+echo "[3/7] Mounting..."
+mkdir -p "$MOUNT"
+mount "$PART" "$MOUNT"
+
+if [ "$BOOT_MODE" = "uefi" ]; then
+    mkdir -p "$MOUNT/boot/efi"
+    mount "$EFI_PART" "$MOUNT/boot/efi"
+fi
+
+# -----------------------------------------------------------------------------
+# 4. Copy rootfs
+# -----------------------------------------------------------------------------
+echo "[4/7] Copying system files..."
+for dir in bin sbin usr lib lib64 etc root home var; do
+    if [ -d "/$dir" ]; then
+        echo "  Copying /$dir..."
+        cp -a "/$dir" "$MOUNT/"
+    fi
+done
+
+# Create empty mountpoints for virtual filesystems
+mkdir -p "$MOUNT/proc"
+mkdir -p "$MOUNT/sys"
+mkdir -p "$MOUNT/dev"
+mkdir -p "$MOUNT/mnt"
+mkdir -p "$MOUNT/tmp"
+chmod 1777 "$MOUNT/tmp"
+
+# Copy kernel and initramfs
+mkdir -p "$MOUNT/boot"
+[ -f /boot/vmlinuz ]           && cp /boot/vmlinuz "$MOUNT/boot/"
+[ -f /boot/initramfs.cpio.gz ] && cp /boot/initramfs.cpio.gz "$MOUNT/boot/"
+
+# -----------------------------------------------------------------------------
+# 5. Create /sbin/init on real disk
+# -----------------------------------------------------------------------------
+echo "[5/7] Creating /sbin/init..."
+cat > "$MOUNT/sbin/init" << 'INIT'
+#!/bin/sh
+# =============================================================================
+#  MyOS /sbin/init  —  Real system init (runs after switch_root)
+# =============================================================================
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# Mount essential filesystems
+mount -t proc     proc  /proc
+mount -t sysfs    sysfs /sys
+mount -t devtmpfs dev   /dev 2>/dev/null
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+
+# Set hostname
+hostname MyOS
+
+# Set root password
+echo "root:root" | chpasswd 2>/dev/null
+
+# Login banner
+cat > /etc/issue << 'ISSUE'
+====================================
+        Welcome to MyOS
+====================================
+ISSUE
+
+# Boot message
+clear
+echo "======================================"
+echo "         MyOS Minimal OS"
+echo "======================================"
+echo " Kernel: $(uname -r)"
+echo " Date  : $(date)"
+echo "======================================"
+echo ""
+echo "[MyOS] System ready."
+echo ""
+
+# Login loop — PID 1 never exits
+while true; do
+    /bin/login
+    echo ""
+    echo "[MyOS] Session ended. Restarting login..."
+    echo ""
+    sleep 1
+done
+INIT
+chmod +x "$MOUNT/sbin/init"
+
+# -----------------------------------------------------------------------------
+# 6. Install GRUB
+# -----------------------------------------------------------------------------
+echo "[6/7] Installing GRUB..."
+
+if command -v grub-install > /dev/null 2>&1; then
+    if [ "$BOOT_MODE" = "uefi" ]; then
+        grub-install \
+            --target=x86_64-efi \
+            --efi-directory="$MOUNT/boot/efi" \
+            --boot-directory="$MOUNT/boot" \
+            --removable \
+            --recheck \
+            "$DISK"
+    else
+        grub-install \
+            --target=i386-pc \
+            --boot-directory="$MOUNT/boot" \
+            --recheck \
+            "$DISK"
+    fi
+else
+    echo "[WARN] grub-install not found — skipping."
+fi
+
+# -----------------------------------------------------------------------------
+# 7. GRUB config
+# -----------------------------------------------------------------------------
+echo "[7/7] Writing GRUB config..."
+mkdir -p "$MOUNT/boot/grub"
+cat > "$MOUNT/boot/grub/grub.cfg" << GRUBCFG
+set timeout=3
+set default=0
+
+menuentry "MyOS" {
+    linux  /boot/vmlinuz root=$PART rw quiet
+    initrd /boot/initramfs.cpio.gz
+}
+GRUBCFG
+
+# -----------------------------------------------------------------------------
+# Done
+# -----------------------------------------------------------------------------
+sync
+
+if [ "$BOOT_MODE" = "uefi" ]; then
+    umount "$MOUNT/boot/efi"
+fi
+umount "$MOUNT"
+
+echo ""
+echo "======================================"
+echo "  Installation complete!"
+echo "  Reboot and remove install media."
+echo "======================================"

@@ -1,3 +1,10 @@
+# 1.0.0 (2026-05-04)
+
+
+### Features
+
+* added .gitignore to ignore large files and other must not pushable to github, rewrite init and install. ([0c78ccd](https://github.com/markjasonespelita/zyphor_server/commit/0c78ccd9cc223b2180f90bfc6ed6a33d6c9ef74f))
+
 # [1.5.0](https://github.com/markjasonespelita/zyphor_os/compare/v1.4.1...v1.5.0) (2026-04-28)
 
 

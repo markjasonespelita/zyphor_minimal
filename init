@@ -1,7 +1,7 @@
 #!/bin/sh
 # =============================================================================
-#  MyOS /init  —  PID 1 entry point
-#  Supports: QEMU/VirtualBox/VMware + Real Hardware (SATA/NVMe/eMMC)
+#  MyOS /init  —  PID 1 entry point (initramfs)
+#  Supports: QEMU / VirtualBox / VMware + Real Hardware (SATA/NVMe/eMMC)
 # =============================================================================
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
@@ -18,6 +18,15 @@ mount -t devpts devpts /dev/pts
 [ ! -e /dev/console ] && mknod -m 600 /dev/console c 5 1
 [ ! -e /dev/null ]    && mknod -m 666 /dev/null    c 1 3
 [ ! -e /dev/tty ]     && mknod -m 666 /dev/tty     c 5 0
+
+# Mount /run as tmpfs early (needed by dhcpcd and udev)
+mount -t tmpfs tmpfs /run
+mkdir -p /run/dhcpcd
+mkdir -p /run/lock
+mkdir -p /run/udev
+
+# Enable sysrq (allows reboot/poweroff via /proc/sysrq-trigger)
+echo 1 > /proc/sys/kernel/sysrq
 
 # -----------------------------------------------------------------------------
 # 2. Redirect stdio to console
@@ -43,11 +52,15 @@ if [ -z "$ROOT" ]; then
     echo "[MyOS] No root= in cmdline. Auto-detecting disk..."
     for dev in \
         /dev/sda1 \
+        /dev/sda2 \
         /dev/sdb1 \
         /dev/nvme0n1p1 \
+        /dev/nvme0n1p2 \
         /dev/nvme1n1p1 \
         /dev/vda1 \
-        /dev/mmcblk0p1; do
+        /dev/vda2 \
+        /dev/mmcblk0p1 \
+        /dev/mmcblk0p2; do
         if [ -b "$dev" ]; then
             ROOT="$dev"
             echo "[MyOS] Found disk: $ROOT"
@@ -86,6 +99,7 @@ if [ -n "$ROOT" ] && mount -t ext4 "$ROOT" /mnt/root 2>/dev/null; then
     if [ -f /mnt/root/sbin/init ]; then
         echo "[MyOS] Found installed system on $ROOT. Booting..."
         exec switch_root /mnt/root /sbin/init
+        # If switch_root fails, fall through to live mode
         echo "[ERROR] switch_root failed! Falling back to live mode..."
         umount /mnt/root 2>/dev/null
     else
@@ -97,10 +111,23 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 6. Live mode
+# 6. Live mode setup
 # -----------------------------------------------------------------------------
 hostname MyOS
 echo "root:root" | chpasswd 2>/dev/null
+
+# Bring up loopback
+ip link set lo up 2>/dev/null
+
+# Bring up ethernet — try common interface names
+for iface in eth0 ens3 ens33 enp0s3 enp1s0; do
+    if ip link show "$iface" > /dev/null 2>&1; then
+        echo "[MyOS] Bringing up $iface..."
+        ip link set "$iface" up
+        dhcpcd "$iface" &
+        break
+    fi
+done
 
 cat > /etc/issue << 'ISSUE'
 ====================================
@@ -116,7 +143,7 @@ echo " Kernel: $(uname -r)"
 echo " Date  : $(date)"
 echo "======================================"
 echo ""
-echo " - To install MyOS type: sh /install"
+echo " - To install MyOS, type: sh /install"
 echo " - Changes here are NOT persistent"
 echo "======================================"
 echo ""

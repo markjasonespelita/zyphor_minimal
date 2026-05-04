@@ -1,8 +1,7 @@
 #!/bin/sh
-
 # =============================================================================
 #  MyOS Installer
-#  Supports: QEMU/VirtualBox/VMware + Real Hardware (BIOS + UEFI)
+#  Supports: QEMU / VirtualBox / VMware + Real Hardware (BIOS + UEFI)
 # =============================================================================
 
 MOUNT="/mnt"
@@ -28,7 +27,7 @@ printf "Enter disk to install to (e.g. sda, nvme0n1, vda): /dev/"
 read DISKNAME
 DISK="/dev/$DISKNAME"
 
-# Handle NVMe partition naming (nvme0n1 -> nvme0n1p1)
+# Handle NVMe / eMMC partition naming (nvme0n1 -> nvme0n1p1)
 case "$DISK" in
     *nvme*|*mmcblk*) PART="${DISK}p1" ;;
     *)               PART="${DISK}1"  ;;
@@ -46,7 +45,7 @@ if [ ! -b "$DISK" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Safety check
+# Safety check — make sure /mnt is free
 # -----------------------------------------------------------------------------
 if mountpoint -q "$MOUNT"; then
     echo "[ERROR] $MOUNT is already mounted. Unmount it first."
@@ -80,17 +79,17 @@ read confirm
 # -----------------------------------------------------------------------------
 # 1. Partition
 # -----------------------------------------------------------------------------
-echo "[1/7] Partitioning $DISK..."
+echo "[1/8] Partitioning $DISK..."
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    # GPT partition table with EFI partition + root partition
+    # GPT: EFI partition (512M) + root partition (rest)
     printf "g\nn\n1\n\n+512M\nt\n1\nn\n2\n\n\nw\n" | fdisk "$DISK"
     case "$DISK" in
         *nvme*|*mmcblk*) EFI_PART="${DISK}p1" ; PART="${DISK}p2" ;;
         *)               EFI_PART="${DISK}1"  ; PART="${DISK}2"  ;;
     esac
 else
-    # MBR partition table with single root partition
+    # MBR: single bootable root partition
     printf "o\nn\np\n1\n\n\na\nw\n" | fdisk "$DISK"
 fi
 
@@ -99,11 +98,11 @@ sleep 2
 # -----------------------------------------------------------------------------
 # 2. Format
 # -----------------------------------------------------------------------------
-echo "[2/7] Formatting partitions..."
+echo "[2/8] Formatting partitions..."
 
 if [ "$BOOT_MODE" = "uefi" ]; then
     mkfs.fat -F32 "$EFI_PART"
-    echo "[MyOS] Formatted EFI partition: $EFI_PART"
+    echo "[MyOS] Formatted EFI partition : $EFI_PART"
 fi
 
 mkfs.ext4 -F -L "MyOS" "$PART"
@@ -112,7 +111,7 @@ echo "[MyOS] Formatted root partition: $PART"
 # -----------------------------------------------------------------------------
 # 3. Mount
 # -----------------------------------------------------------------------------
-echo "[3/7] Mounting..."
+echo "[3/8] Mounting..."
 mkdir -p "$MOUNT"
 mount "$PART" "$MOUNT"
 
@@ -124,7 +123,7 @@ fi
 # -----------------------------------------------------------------------------
 # 4. Copy rootfs
 # -----------------------------------------------------------------------------
-echo "[4/7] Copying system files..."
+echo "[4/8] Copying system files..."
 for dir in bin sbin usr lib lib64 etc root home var; do
     if [ -d "/$dir" ]; then
         echo "  Copying /$dir..."
@@ -132,39 +131,68 @@ for dir in bin sbin usr lib lib64 etc root home var; do
     fi
 done
 
-# Create empty mountpoints for virtual filesystems
+# Create essential mountpoints
 mkdir -p "$MOUNT/proc"
 mkdir -p "$MOUNT/sys"
 mkdir -p "$MOUNT/dev"
+mkdir -p "$MOUNT/run"
 mkdir -p "$MOUNT/mnt"
 mkdir -p "$MOUNT/tmp"
 chmod 1777 "$MOUNT/tmp"
 
 # Copy kernel and initramfs
 mkdir -p "$MOUNT/boot"
-[ -f /boot/vmlinuz ]           && cp /boot/vmlinuz "$MOUNT/boot/"
-[ -f /boot/initramfs.cpio.gz ] && cp /boot/initramfs.cpio.gz "$MOUNT/boot/"
+[ -f /boot/vmlinuz ]   && cp /boot/vmlinuz   "$MOUNT/boot/"
+[ -f /boot/initramfs ] && cp /boot/initramfs "$MOUNT/boot/"
 
 # -----------------------------------------------------------------------------
-# 5. Create /sbin/init on real disk
+# 5. Create /sbin/init on installed system
 # -----------------------------------------------------------------------------
-echo "[5/7] Creating /sbin/init..."
+echo "[5/8] Creating /sbin/init..."
+mkdir -p "$MOUNT/sbin"
 cat > "$MOUNT/sbin/init" << 'INIT'
 #!/bin/sh
 # =============================================================================
-#  MyOS /sbin/init  —  Real system init (runs after switch_root)
+#  MyOS /sbin/init  —  Installed system init (runs after switch_root)
 # =============================================================================
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Mount essential filesystems
-mount -t proc     proc  /proc
-mount -t sysfs    sysfs /sys
-mount -t devtmpfs dev   /dev 2>/dev/null
+# Mount essential pseudo-filesystems
+mount -t proc     proc     /proc
+mount -t sysfs    sysfs    /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts
 
+# Safety fallback: ensure critical device nodes exist
+[ ! -e /dev/console ] && mknod -m 600 /dev/console c 5 1
+[ ! -e /dev/null ]    && mknod -m 666 /dev/null    c 1 3
+[ ! -e /dev/tty ]     && mknod -m 666 /dev/tty     c 5 0
+
+# Mount /run as tmpfs — required by dhcpcd, udev, and others
+mount -t tmpfs tmpfs /run
+mkdir -p /run/dhcpcd
+mkdir -p /run/lock
+mkdir -p /run/udev
+
+# Enable sysrq — allows reboot/poweroff via /proc/sysrq-trigger
+echo 1 > /proc/sys/kernel/sysrq
+
 # Set hostname
 hostname MyOS
+
+# Bring up loopback
+ip link set lo up 2>/dev/null
+
+# Bring up ethernet — try common interface names
+for iface in eth0 ens3 ens33 enp0s3 enp1s0; do
+    if ip link show "$iface" > /dev/null 2>&1; then
+        echo "[MyOS] Bringing up $iface..."
+        ip link set "$iface" up
+        dhcpcd "$iface" &
+        break
+    fi
+done
 
 # Set root password
 echo "root:root" | chpasswd 2>/dev/null
@@ -200,9 +228,33 @@ INIT
 chmod +x "$MOUNT/sbin/init"
 
 # -----------------------------------------------------------------------------
-# 6. Install GRUB
+# 6. Create reboot / poweroff / shutdown commands
 # -----------------------------------------------------------------------------
-echo "[6/7] Installing GRUB..."
+echo "[6/8] Creating reboot/poweroff commands..."
+
+cat > "$MOUNT/bin/reboot" << 'EOF'
+#!/bin/sh
+echo "[MyOS] Rebooting..."
+sync
+echo b > /proc/sysrq-trigger
+EOF
+chmod +x "$MOUNT/bin/reboot"
+
+cat > "$MOUNT/bin/poweroff" << 'EOF'
+#!/bin/sh
+echo "[MyOS] Powering off..."
+sync
+echo o > /proc/sysrq-trigger
+EOF
+chmod +x "$MOUNT/bin/poweroff"
+
+# Alias shutdown to poweroff
+ln -sf /bin/poweroff "$MOUNT/bin/shutdown"
+
+# -----------------------------------------------------------------------------
+# 7. Install GRUB
+# -----------------------------------------------------------------------------
+echo "[7/8] Installing GRUB..."
 
 if command -v grub-install > /dev/null 2>&1; then
     if [ "$BOOT_MODE" = "uefi" ]; then
@@ -221,13 +273,13 @@ if command -v grub-install > /dev/null 2>&1; then
             "$DISK"
     fi
 else
-    echo "[WARN] grub-install not found — skipping."
+    echo "[WARN] grub-install not found — skipping GRUB installation."
 fi
 
 # -----------------------------------------------------------------------------
-# 7. GRUB config
+# 8. Write GRUB config
 # -----------------------------------------------------------------------------
-echo "[7/7] Writing GRUB config..."
+echo "[8/8] Writing GRUB config..."
 mkdir -p "$MOUNT/boot/grub"
 cat > "$MOUNT/boot/grub/grub.cfg" << GRUBCFG
 set timeout=3
@@ -235,12 +287,12 @@ set default=0
 
 menuentry "MyOS" {
     linux  /boot/vmlinuz root=$PART rw quiet
-    initrd /boot/initramfs.cpio.gz
+    initrd /boot/initramfs
 }
 GRUBCFG
 
 # -----------------------------------------------------------------------------
-# Done
+# Done — unmount cleanly
 # -----------------------------------------------------------------------------
 sync
 

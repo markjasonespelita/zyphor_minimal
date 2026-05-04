@@ -1,0 +1,10 @@
+initramfs
+test.qcow2
+
+rootfs/*
+
+bootloader/boot/initramfs
+bootloader/boot/vmlinuz
+*.iso
+
+kernel/linux

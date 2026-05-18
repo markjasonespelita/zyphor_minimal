@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.1.0...v1.2.0) (2026-05-18)
+
+
+### Features
+
+* make /bin and /sbin symlink from /usr/bin and /usr/sbin and renamed the gub bootloader grub config into MyOS. ([1c96669](https://github.com/markjasonespelita/zyphor_minimal/commit/1c96669538285c7303d43789f9eecb6f1392f90e))
+
 # [1.1.0](https://github.com/markjasonespelita/zyphor_server/compare/v1.0.0...v1.1.0) (2026-05-04)
 
 

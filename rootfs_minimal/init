@@ -1,133 +1,28 @@
 #!/bin/sh
-# =============================================================================
-#  MyOS /init  —  PID 1 entry point
-#  Supports: QEMU/VirtualBox/VMware + Real Hardware (SATA/NVMe/eMMC)
-# =============================================================================
+
+# Minimal init for MyOS
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# -----------------------------------------------------------------------------
-# 1. Mount essential pseudo-filesystems
-# -----------------------------------------------------------------------------
-mount -t proc     proc     /proc
-mount -t sysfs    sysfs    /sys
-mount -t devtmpfs devtmpfs /dev 2>/dev/null || mdev -s 2>/dev/null
-mkdir -p /dev/pts
-mount -t devpts devpts /dev/pts
+# Mount essential filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
 
-# Safety fallback: ensure critical device nodes exist
-[ ! -e /dev/console ] && mknod -m 600 /dev/console c 5 1
-[ ! -e /dev/null ]    && mknod -m 666 /dev/null    c 1 3
-[ ! -e /dev/tty ]     && mknod -m 666 /dev/tty     c 5 0
+# Ensure console exists
+[ -e /dev/console ] || mknod /dev/console c 5 1
 
-# -----------------------------------------------------------------------------
-# 2. Redirect stdio to console
-# -----------------------------------------------------------------------------
+# Redirect input/output to console
 exec 0</dev/console
 exec 1>/dev/console
 exec 2>/dev/console
 
-# -----------------------------------------------------------------------------
-# 3. Detect root partition from kernel cmdline or auto-detect
-# -----------------------------------------------------------------------------
-ROOT=""
-
-# Try to get root= from kernel cmdline first (set by GRUB)
-for param in $(cat /proc/cmdline); do
-    case "$param" in
-        root=*) ROOT="${param#root=}" ;;
-    esac
-done
-
-# If no root= passed, auto-detect by scanning known disk names
-if [ -z "$ROOT" ]; then
-    echo "[MyOS] No root= in cmdline. Auto-detecting disk..."
-    for dev in \
-        /dev/sda1 \
-        /dev/sdb1 \
-        /dev/nvme0n1p1 \
-        /dev/nvme1n1p1 \
-        /dev/vda1 \
-        /dev/mmcblk0p1; do
-        if [ -b "$dev" ]; then
-            ROOT="$dev"
-            echo "[MyOS] Found disk: $ROOT"
-            break
-        fi
-    done
-fi
-
-if [ -z "$ROOT" ]; then
-    echo "[WARN] Could not detect any disk. Starting live mode..."
-fi
-
-# -----------------------------------------------------------------------------
-# 4. Wait for detected disk to be ready (max 10 seconds)
-# -----------------------------------------------------------------------------
-if [ -n "$ROOT" ]; then
-    echo "[MyOS] Waiting for $ROOT..."
-    TRIES=0
-    while [ ! -b "$ROOT" ]; do
-        sleep 1
-        TRIES=$((TRIES + 1))
-        if [ "$TRIES" -ge 10 ]; then
-            echo "[WARN] $ROOT not ready after 10 seconds. Starting live mode..."
-            ROOT=""
-            break
-        fi
-    done
-fi
-
-# -----------------------------------------------------------------------------
-# 5. Try to boot installed system, otherwise fall back to live mode
-# -----------------------------------------------------------------------------
-mkdir -p /mnt/root
-
-if [ -n "$ROOT" ] && mount -t ext4 "$ROOT" /mnt/root 2>/dev/null; then
-    if [ -f /mnt/root/sbin/init ]; then
-        echo "[MyOS] Found installed system on $ROOT. Booting..."
-        exec switch_root /mnt/root /sbin/init
-        echo "[ERROR] switch_root failed! Falling back to live mode..."
-        umount /mnt/root 2>/dev/null
-    else
-        echo "[WARN] /sbin/init not found on $ROOT. Starting live mode..."
-        umount /mnt/root
-    fi
-else
-    echo "[WARN] Could not mount $ROOT. Starting live mode..."
-fi
-
-# -----------------------------------------------------------------------------
-# 6. Live mode
-# -----------------------------------------------------------------------------
-hostname MyOS
-echo "root:root" | chpasswd 2>/dev/null
-
-cat > /etc/issue << 'ISSUE'
-====================================
-        Welcome to MyOS
-====================================
-ISSUE
-
 clear
-echo "======================================"
-echo "         MyOS Live Mode"
-echo "======================================"
-echo " Kernel: $(uname -r)"
-echo " Date  : $(date)"
-echo "======================================"
+
 echo ""
-echo " - To install MyOS type: sh /install"
-echo " - Changes here are NOT persistent"
-echo "======================================"
+echo "================================"
+echo "        MyOS Minimal Init"
+echo "================================"
 echo ""
 
-# -----------------------------------------------------------------------------
-# 7. Live mode login loop — PID 1 never exits
-# -----------------------------------------------------------------------------
-while true; do
-    /bin/login
-    echo ""
-    echo "[MyOS] Session ended. Restarting login..."
-    echo ""
-    sleep 1
-done
+# Start shell as PID 1
+exec /bin/sh

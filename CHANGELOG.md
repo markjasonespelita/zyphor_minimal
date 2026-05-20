@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.2.0...v1.3.0) (2026-05-20)
+
+
+### Features
+
+* added /usr/sbin and symlink on the rootfs_minimal ([54a9837](https://github.com/markjasonespelita/zyphor_minimal/commit/54a983701a3669e41b5946f7f45d1ba2204f9663))
+
 # [1.2.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.1.0...v1.2.0) (2026-05-18)
 
 

@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.3.0...v1.4.0) (2026-05-21)
+
+
+### Features
+
+* added GUIDE.md for a minimal linux based operating system build. ([5c53652](https://github.com/markjasonespelita/zyphor_minimal/commit/5c53652032be271e33da201c73f7f457bb9adf93))
+
 # [1.3.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.2.0...v1.3.0) (2026-05-20)
 
 

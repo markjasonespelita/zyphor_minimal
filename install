@@ -1,8 +1,18 @@
 #!/bin/sh
 # =============================================================================
-#  ZyphorServer Installer
+#  MyOS Installer
 #  Supports: QEMU / VirtualBox / VMware + Real Hardware (BIOS + UEFI)
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# OS Identity Variables
+# -----------------------------------------------------------------------------
+OS_NAME="MyOS"
+OS_FIRST="OS"
+OS_SECOND="Server"
+OS_HOSTNAME="MyOS"
+OS_HISTORY="myos_history"
+OS_LABEL="MyOS"
 
 MOUNT="/mnt"
 
@@ -19,7 +29,7 @@ done
 # -----------------------------------------------------------------------------
 # Auto-detect disk
 # -----------------------------------------------------------------------------
-echo "[ZyphorServer] Detecting available disks..."
+echo "[$OS_NAME] Detecting available disks..."
 lsblk -d -o NAME,SIZE,TYPE | grep disk
 
 echo ""
@@ -27,14 +37,13 @@ printf "Enter disk to install to (e.g. sda, nvme0n1, vda): /dev/"
 read DISKNAME
 DISK="/dev/$DISKNAME"
 
-# Handle NVMe / eMMC partition naming (nvme0n1 -> nvme0n1p1)
 case "$DISK" in
     *nvme*|*mmcblk*) PART="${DISK}p1" ;;
     *)               PART="${DISK}1"  ;;
 esac
 
-echo "[ZyphorServer] Selected disk : $DISK"
-echo "[ZyphorServer] Partition     : $PART"
+echo "[$OS_NAME] Selected disk : $DISK"
+echo "[$OS_NAME] Partition     : $PART"
 
 # -----------------------------------------------------------------------------
 # Check disk exists
@@ -57,10 +66,10 @@ fi
 # -----------------------------------------------------------------------------
 if [ -d /sys/firmware/efi ]; then
     BOOT_MODE="uefi"
-    echo "[ZyphorServer] Boot mode: UEFI"
+    echo "[$OS_NAME] Boot mode: UEFI"
 else
     BOOT_MODE="bios"
-    echo "[ZyphorServer] Boot mode: BIOS/Legacy"
+    echo "[$OS_NAME] Boot mode: BIOS/Legacy"
 fi
 
 # -----------------------------------------------------------------------------
@@ -82,14 +91,12 @@ read confirm
 echo "[1/9] Partitioning $DISK..."
 
 if [ "$BOOT_MODE" = "uefi" ]; then
-    # GPT: EFI partition (512M) + root partition (rest)
     printf "g\nn\n1\n\n+512M\nt\n1\nn\n2\n\n\nw\n" | fdisk "$DISK"
     case "$DISK" in
         *nvme*|*mmcblk*) EFI_PART="${DISK}p1" ; PART="${DISK}p2" ;;
         *)               EFI_PART="${DISK}1"  ; PART="${DISK}2"  ;;
     esac
 else
-    # MBR: single bootable root partition
     printf "o\nn\np\n1\n\n\na\nw\n" | fdisk "$DISK"
 fi
 
@@ -102,11 +109,11 @@ echo "[2/9] Formatting partitions..."
 
 if [ "$BOOT_MODE" = "uefi" ]; then
     mkfs.fat -F32 "$EFI_PART"
-    echo "[ZyphorServer] Formatted EFI partition : $EFI_PART"
+    echo "[$OS_NAME] Formatted EFI partition : $EFI_PART"
 fi
 
-mkfs.ext4 -F -L "ZyphorServer" "$PART"
-echo "[ZyphorServer] Formatted root partition: $PART"
+mkfs.ext4 -F -L "$OS_LABEL" "$PART"
+echo "[$OS_NAME] Formatted root partition: $PART"
 
 # -----------------------------------------------------------------------------
 # 3. Mount
@@ -131,7 +138,6 @@ for dir in bin sbin usr lib lib64 etc root home var; do
     fi
 done
 
-# Create essential mountpoints
 mkdir -p "$MOUNT/proc"
 mkdir -p "$MOUNT/sys"
 mkdir -p "$MOUNT/dev"
@@ -140,7 +146,6 @@ mkdir -p "$MOUNT/mnt"
 mkdir -p "$MOUNT/tmp"
 chmod 1777 "$MOUNT/tmp"
 
-# Copy kernel and initramfs
 mkdir -p "$MOUNT/boot"
 [ -f /boot/vmlinuz ]   && cp /boot/vmlinuz   "$MOUNT/boot/"
 [ -f /boot/initramfs ] && cp /boot/initramfs "$MOUNT/boot/"
@@ -150,7 +155,6 @@ mkdir -p "$MOUNT/boot"
 # -----------------------------------------------------------------------------
 echo "[5/9] Installing lolcat and figlet..."
 
-# Try apk (Alpine), then apt-get (Debian/Ubuntu)
 if command -v apk > /dev/null 2>&1; then
     apk add --root "$MOUNT" --no-cache figlet lolcat 2>/dev/null || \
     apk add --no-cache figlet lolcat && \
@@ -171,7 +175,6 @@ else
     done
 fi
 
-# Copy lolcat Ruby gem or shared libs if needed
 if command -v lolcat > /dev/null 2>&1; then
     GEM_DIR="$(gem environment gemdir 2>/dev/null)"
     [ -n "$GEM_DIR" ] && [ -d "$GEM_DIR" ] && \
@@ -179,7 +182,6 @@ if command -v lolcat > /dev/null 2>&1; then
         cp -a "$GEM_DIR/." "$MOUNT/$GEM_DIR/" 2>/dev/null || true
 fi
 
-# Copy figlet fonts directory
 for FDIR in /usr/share/figlet /usr/share/figlet/fonts /usr/local/share/figlet; do
     if [ -d "$FDIR" ]; then
         mkdir -p "$MOUNT$FDIR"
@@ -193,91 +195,79 @@ done
 # -----------------------------------------------------------------------------
 echo "[6/9] Creating /sbin/init..."
 mkdir -p "$MOUNT/sbin"
-cat > "$MOUNT/sbin/init" << 'INIT'
+cat > "$MOUNT/sbin/init" << INIT
 #!/bin/sh
 # =============================================================================
-#  ZyphorServer /sbin/init  —  Installed system init (runs after switch_root)
+#  $OS_NAME /sbin/init  —  Installed system init (runs after switch_root)
 # =============================================================================
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-# Mount essential pseudo-filesystems
+OS_NAME="$OS_NAME"
+OS_FIRST="$OS_FIRST"
+OS_SECOND="$OS_SECOND"
+OS_HOSTNAME="$OS_HOSTNAME"
+
 mount -t proc     proc     /proc
 mount -t sysfs    sysfs    /sys
 mount -t devtmpfs devtmpfs /dev 2>/dev/null
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts
 
-# Safety fallback: ensure critical device nodes exist
 [ ! -e /dev/console ] && mknod -m 600 /dev/console c 5 1
 [ ! -e /dev/null ]    && mknod -m 666 /dev/null    c 1 3
 [ ! -e /dev/tty ]     && mknod -m 666 /dev/tty     c 5 0
 
-# Mount /run as tmpfs — required by dhcpcd, udev, and others
 mount -t tmpfs tmpfs /run
 mkdir -p /run/dhcpcd
 mkdir -p /run/lock
 mkdir -p /run/udev
 
-# Enable sysrq — allows reboot/poweroff via /proc/sysrq-trigger
 echo 1 > /proc/sys/kernel/sysrq
 
-# hostname config
-echo "ZyphorServer" > /etc/hostname
+echo "\$OS_HOSTNAME" > /etc/hostname
+printf "127.0.0.1   localhost\n127.0.1.1   \$OS_HOSTNAME\n" > /etc/hosts
+hostname "\$OS_HOSTNAME"
 
-# hosts config
-printf "127.0.0.1   localhost\n127.0.1.1   ZyphorServer\n" > /etc/hosts
-
-# Set hostname
-hostname ZyphorServer
-
-# Bring up loopback
 ip link set lo up 2>/dev/null
 
-# Bring up ethernet — try common interface names
 for iface in eth0 ens3 ens33 enp0s3 enp1s0; do
-    if ip link show "$iface" > /dev/null 2>&1; then
-        echo "[ZyphorServer] Bringing up $iface..."
-        ip link set "$iface" up
-        dhcpcd "$iface" &
+    if ip link show "\$iface" > /dev/null 2>&1; then
+        echo "[\$OS_NAME] Bringing up \$iface..."
+        ip link set "\$iface" up
+        dhcpcd "\$iface" &
         break
     fi
 done
 
-# Set root password
 echo "root:root" | chpasswd 2>/dev/null
 
-# -------------------------------------------------------
-#  Boot banner (lolcat + figlet)
-# -------------------------------------------------------
 show_banner() {
     clear
     if command -v figlet > /dev/null 2>&1 && command -v lolcat > /dev/null 2>&1; then
-        figlet -f slant "Zyphor" | lolcat
-        figlet -f small "  Server" | lolcat
+        figlet -f slant "\$OS_FIRST" | lolcat
+        figlet -f small "  \$OS_SECOND" | lolcat
         printf "\n"
-        printf "  Kernel : %s\n" "$(uname -r)"          | lolcat
-        printf "  Date   : %s\n" "$(date '+%F  %T')"    | lolcat
-        printf "  Host   : ZyphorServer\n"               | lolcat
+        printf "  Kernel : %s\n" "\$(uname -r)"          | lolcat
+        printf "  Date   : %s\n" "\$(date '+%F  %T')"    | lolcat
+        printf "  Host   : %s\n" "\$OS_NAME"              | lolcat
         printf "\n"
-        printf "  Type 'help' for available commands.\n" | lolcat
+        printf "  Type 'help' for available commands.\n"  | lolcat
         printf "\n"
     else
-        # Fallback plain banner
         echo "======================================"
-        echo "         ZyphorServer Minimal OS"
+        echo "         \$OS_NAME Minimal OS"
         echo "======================================"
-        echo " Kernel: $(uname -r)"
-        echo " Date  : $(date)"
+        echo " Kernel: \$(uname -r)"
+        echo " Date  : \$(date)"
         echo "======================================"
         echo ""
-        echo "[ZyphorServer] System ready."
+        echo "[\$OS_NAME] System ready."
         echo ""
     fi
 }
 
 show_banner
 
-# Login loop — PID 1 never exits
 while true; do
     /bin/login
     echo ""
@@ -288,30 +278,32 @@ INIT
 chmod +x "$MOUNT/sbin/init"
 
 # -----------------------------------------------------------------------------
-# 7. Configure /etc/profile — banner + shell niceties on every login
+# 7. Configure /etc/profile
 # -----------------------------------------------------------------------------
 echo "[7/9] Configuring shell profile..."
-cat > "$MOUNT/etc/profile" << 'PROFILE'
+cat > "$MOUNT/etc/profile" << PROFILE
 # =============================================================================
-#  ZyphorServer /etc/profile  —  Login shell configuration
+#  $OS_NAME /etc/profile  —  Login shell configuration
 # =============================================================================
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export TERM=xterm-256color
 export EDITOR=vi
 export PAGER=more
 export HISTSIZE=500
-export HISTFILE=~/.zyphor_history
+export HISTFILE=~/.${OS_HISTORY}
 
-# ── Coloured prompt ──────────────────────────────────────────────────────────
-# Shows:  [user@ZyphorServer path]$
+OS_NAME="$OS_NAME"
+OS_FIRST="$OS_FIRST"
+OS_SECOND="$OS_SECOND"
+OS_HOSTNAME="$OS_HOSTNAME"
+
 RED='\[\033[0;31m\]'
 GRN='\[\033[0;32m\]'
 CYN='\[\033[0;36m\]'
 YLW='\[\033[0;33m\]'
 RST='\[\033[0m\]'
-export PS1="${CYN}[${GRN}\u${CYN}@${YLW}ZyphorServer ${CYN}\w${CYN}]${RED}\$${RST} "
+export PS1="\${CYN}[\${GRN}\u\${CYN}@\${YLW}\$OS_HOSTNAME \${CYN}\w\${CYN}]\${RED}\\\$\${RST} "
 
-# ── Handy aliases ────────────────────────────────────────────────────────────
 alias ls='ls --color=auto'
 alias ll='ls -lAh --color=auto'
 alias la='ls -A --color=auto'
@@ -321,23 +313,21 @@ alias reboot='reboot'
 alias poweroff='poweroff'
 alias shutdown='poweroff'
 
-# ── Login banner (lolcat + figlet) ───────────────────────────────────────────
 if command -v figlet > /dev/null 2>&1 && command -v lolcat > /dev/null 2>&1; then
     clear
-    figlet -f slant "Zyphor" | lolcat
-    figlet -f small "  Server" | lolcat
+    figlet -f slant "\$OS_FIRST" | lolcat
+    figlet -f small "  \$OS_SECOND" | lolcat
     printf "\n"
-    printf "  Kernel : %s\n" "$(uname -r)"          | lolcat
-    printf "  Date   : %s\n" "$(date '+%F  %T')"    | lolcat
-    printf "  Host   : ZyphorServer\n"               | lolcat
-    printf "  Uptime : %s\n" "$(uptime -p 2>/dev/null || uptime)" | lolcat
+    printf "  Kernel : %s\n" "\$(uname -r)"          | lolcat
+    printf "  Date   : %s\n" "\$(date '+%F  %T')"    | lolcat
+    printf "  Host   : %s\n" "\$OS_NAME"              | lolcat
+    printf "  Uptime : %s\n" "\$(uptime -p 2>/dev/null || uptime)" | lolcat
     printf "\n"
-    printf "  Type 'help' for available commands.\n" | lolcat
+    printf "  Type 'help' for available commands.\n"  | lolcat
     printf "\n"
 fi
 
-# Source user-specific config if present
-[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+[ -f "\$HOME/.profile" ] && . "\$HOME/.profile"
 PROFILE
 
 # -----------------------------------------------------------------------------
@@ -345,23 +335,22 @@ PROFILE
 # -----------------------------------------------------------------------------
 echo "[8/9] Creating reboot/poweroff commands..."
 
-cat > "$MOUNT/bin/reboot" << 'EOF'
+cat > "$MOUNT/bin/reboot" << EOF
 #!/bin/sh
-echo "[ZyphorServer] Rebooting..."
+echo "[$OS_NAME] Rebooting..."
 sync
 echo b > /proc/sysrq-trigger
 EOF
 chmod +x "$MOUNT/bin/reboot"
 
-cat > "$MOUNT/bin/poweroff" << 'EOF'
+cat > "$MOUNT/bin/poweroff" << EOF
 #!/bin/sh
-echo "[ZyphorServer] Powering off..."
+echo "[$OS_NAME] Powering off..."
 sync
 echo o > /proc/sysrq-trigger
 EOF
 chmod +x "$MOUNT/bin/poweroff"
 
-# Alias shutdown to poweroff
 ln -sf /bin/poweroff "$MOUNT/bin/shutdown"
 
 # -----------------------------------------------------------------------------
@@ -394,14 +383,14 @@ cat > "$MOUNT/boot/grub/grub.cfg" << GRUBCFG
 set timeout=3
 set default=0
 
-menuentry "ZyphorServer" {
+menuentry "$OS_NAME" {
     linux  /boot/vmlinuz root=$PART rw quiet
     initrd /boot/initramfs
 }
 GRUBCFG
 
 # -----------------------------------------------------------------------------
-# Done — unmount cleanly
+# Done
 # -----------------------------------------------------------------------------
 sync
 

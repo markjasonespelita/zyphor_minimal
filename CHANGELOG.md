@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.4.0...v1.4.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* replaced zyphor server terminologies in zyphor minimal codebase to avoid confusion. ([93e678c](https://github.com/markjasonespelita/zyphor_minimal/commit/93e678ccec317fd1ba4846d7e39cf28067c1007d))
+
 # [1.4.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.3.0...v1.4.0) (2026-05-21)
 
 

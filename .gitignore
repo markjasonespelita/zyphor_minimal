@@ -8,3 +8,11 @@ bootloader/boot/vmlinuz
 *.iso
 
 kernel/linux
+
+images/*.qcow2
+images/*.iso
+
+## Executables
+bootHardDisk
+bootCDROM
+vmInit

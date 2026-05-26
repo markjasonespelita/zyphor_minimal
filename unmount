@@ -1,0 +1,9 @@
+#!/bin/bash
+
+sudo umount -l ~/zyphor_minimal/rootfs/dev/pts
+sudo umount -l ~/zyphor_minimal/rootfs/dev
+sudo umount -l ~/zyphor_minimal/rootfs/proc
+sudo umount -l ~/zyphor_minimal/rootfs/sys
+sudo umount -l ~/zyphor_minimal/rootfs/tmp
+
+echo "Unmounted."

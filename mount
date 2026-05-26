@@ -1,0 +1,10 @@
+#!/bin/bash
+
+sudo mount -t proc /proc ~/zyphor_minimal/rootfs/proc
+sudo mount -t sysfs /sys ~/zyphor_minimal/rootfs/sys
+sudo mount --bind /dev ~/zyphor_minimal/rootfs/dev
+sudo mount --bind /dev/pts ~/zyphor_minimal/rootfs/dev/pts
+sudo mount -t tmpfs tmpfs ~/zyphor_minimal/rootfs/tmp
+sudo mount -t devpts devpts ~/zyphor_minimal/rootfs/dev/pts
+
+echo "Mounted."

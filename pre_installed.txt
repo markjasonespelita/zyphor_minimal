@@ -1,0 +1,5 @@
+sudo chroot rootfs /bin/bash
+
+apt update && apt install grub2-common grub-pc ca-certificates
+
+update-ca-certificates

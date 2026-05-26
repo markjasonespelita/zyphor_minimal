@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.4.1...v1.5.0) (2026-05-26)
+
+
+### Features
+
+* added automated scripts in mounting and unmounting nessesary root filesystem folders. ([bbb2c0d](https://github.com/markjasonespelita/zyphor_minimal/commit/bbb2c0d058c4972622540890ac2893c89753de84))
+
 ## [1.4.1](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.4.0...v1.4.1) (2026-05-24)
 
 

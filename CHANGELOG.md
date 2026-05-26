@@ -1,3 +1,14 @@
+# [1.7.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.6.0...v1.7.0) (2026-05-26)
+
+
+### Features
+
+* added bootCDROM.c for booting iso image in the vm. ([e4b4723](https://github.com/markjasonespelita/zyphor_minimal/commit/e4b47231c759b3613da6ec85ec0407f3326bfacf))
+* added bootHardDisk.c for booting the hard disk image in the vm. ([5455652](https://github.com/markjasonespelita/zyphor_minimal/commit/545565263b70e278f92f9981bbb3e72ec4409c16))
+* added helper functions in C. ([8aff82b](https://github.com/markjasonespelita/zyphor_minimal/commit/8aff82b14375dff31434b210d161169d998cdfa7))
+* added images folder for image iso and vm storage. ([4033719](https://github.com/markjasonespelita/zyphor_minimal/commit/403371918fe3993957d7f02f9ce70afa72860614))
+* added vmInit.c for virtual machine initialization. ([797740c](https://github.com/markjasonespelita/zyphor_minimal/commit/797740c513bc5d01da2b5a51f06217909283e8b6))
+
 # [1.6.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.5.0...v1.6.0) (2026-05-26)
 
 

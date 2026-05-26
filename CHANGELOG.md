@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.5.0...v1.6.0) (2026-05-26)
+
+
+### Features
+
+* added desktop-environment live build using kali-linux build scripts. ([d31c497](https://github.com/markjasonespelita/zyphor_minimal/commit/d31c49793a0045a25cbff13992c2fef686010b9b))
+
 # [1.5.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.4.1...v1.5.0) (2026-05-26)
 
 

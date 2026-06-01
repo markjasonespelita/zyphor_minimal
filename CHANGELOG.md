@@ -1,3 +1,18 @@
+# [1.8.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.7.0...v1.8.0) (2026-06-01)
+
+
+### Features
+
+* added helpers/DOCUMENTATION to document all the C helper functions. ([8c28d64](https://github.com/markjasonespelita/zyphor_minimal/commit/8c28d6438bc79a0ccaec55c092fea93c38981d0c))
+* added helpers/helperCommand.c for command exec library. ([ecff344](https://github.com/markjasonespelita/zyphor_minimal/commit/ecff344d6d3538f9f6ff57802d60bdedef88f82d))
+* added helpers/helperGUI.c for GUI library. ([0d213fd](https://github.com/markjasonespelita/zyphor_minimal/commit/0d213fd5a58c6be84b8bfdd1dac412e413dbeb32))
+* added helpers/helperGUIDepends to list the GUI Dependencies. ([4c00cf4](https://github.com/markjasonespelita/zyphor_minimal/commit/4c00cf430d45754afb9c9999ea36d8e047a41700))
+* added helpers/helperLayout.c for file reading library. ([06ccee4](https://github.com/markjasonespelita/zyphor_minimal/commit/06ccee478acf1e9bffe665a36dca7312c00bb6b3))
+* added helpers/helperLayout.c for layout library. ([c6073e9](https://github.com/markjasonespelita/zyphor_minimal/commit/c6073e9207464f5f4d9c0ce4f2358acc2cb6a36a))
+* added helpers/helperWidgets.c for widgets library. ([933c2fc](https://github.com/markjasonespelita/zyphor_minimal/commit/933c2fc55c760287a690c36eed80fb406b70212e))
+* added shell codebase to the root directory ([a06e427](https://github.com/markjasonespelita/zyphor_minimal/commit/a06e427e6bbab3a39abad24be725d91cdd7c957c))
+* added the C header files inside the helpers/headers folder. ([5aa4fdb](https://github.com/markjasonespelita/zyphor_minimal/commit/5aa4fdb7feccefdc2bd0b28cc373ff38bcc73d6a))
+
 # [1.7.0](https://github.com/markjasonespelita/zyphor_minimal/compare/v1.6.0...v1.7.0) (2026-05-26)
 
 

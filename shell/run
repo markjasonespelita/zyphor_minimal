@@ -1,0 +1,3 @@
+#!bin/sh
+
+./zyshell/usr/bin/zyshell
